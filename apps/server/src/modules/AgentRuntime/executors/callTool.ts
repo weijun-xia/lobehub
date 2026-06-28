@@ -26,6 +26,7 @@ import { type RuntimeExecutorContext } from '../context';
 import { dispatchClientTool } from '../dispatchClientTool';
 import {
   archiveRuntimeToolResult,
+  attachWorkSourceMessage,
   buildServerAgentMemberRunner,
   buildServerVirtualSubAgentRunner,
   executeToolWithRetry,
@@ -219,9 +220,19 @@ export const callTool =
             manifest: effectiveManifestMap[chatToolPayload.identifier],
           });
           const dispatchResult = await dispatchClientTool(chatToolPayload, {
+            agentId: state.metadata?.agentId,
+            assistantMessageId: payload.parentMessageId,
+            documentId: state.metadata?.documentId,
+            groupId: state.metadata?.groupId,
             operationId,
+            rootOperationId: operationId,
+            scope: state.metadata?.scope,
+            sourceMessageId: state.metadata?.sourceMessageId,
             streamManager,
+            taskId: state.metadata?.taskId,
+            threadId: state.metadata?.threadId,
             timeoutMs,
+            topicId: state.metadata?.topicId ?? ctx.topicId,
           });
           execution = { attempts: 1, result: dispatchResult };
         } else {
@@ -270,6 +281,7 @@ export const callTool =
                 ),
                 agentVisibility,
                 // Assistant message owning this tool call (≠ source user message).
+                anchorMessageId: payload.parentMessageId,
                 assistantMessageId: payload.parentMessageId,
                 deviceCapable: state.metadata?.executionPlan
                   ? isDeviceCapablePlan(state.metadata.executionPlan)
@@ -294,6 +306,7 @@ export const callTool =
                     source: skill.source === 'device' ? 'device' : 'project',
                   })),
                 scope: state.metadata?.scope,
+                rootOperationId: operationId,
                 serverDB: ctx.serverDB,
                 skipResultTruncation: true,
                 subAgent: buildServerVirtualSubAgentRunner(
@@ -305,6 +318,7 @@ export const callTool =
                 taskId: state.metadata?.taskId,
                 threadId: state.metadata?.threadId,
                 toolCallId: chatToolPayload.id,
+                toolMessageId: payload.skipCreateToolMessage ? payload.parentMessageId : undefined,
                 toolManifestMap: effectiveManifestMap,
                 toolResultMaxLength,
                 topicId: ctx.topicId,
@@ -470,6 +484,15 @@ export const callTool =
           // into event records and returns the unchanged state) re-throws.
           throw markPersistFatal(fatal);
         }
+
+        await attachWorkSourceMessage({
+          rootOperationId: operationId,
+          serverDB: ctx.serverDB,
+          sourceMessageId: toolMessageId,
+          sourceToolCallId: chatToolPayload.id,
+          userId: ctx.userId,
+          workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
+        });
 
         const newState = structuredClone(state);
 
