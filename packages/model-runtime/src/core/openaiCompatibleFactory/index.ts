@@ -669,6 +669,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           const {
             apiMode: _apiMode,
             preserveThinking: _preserveThinking,
+            thinking: _thinking,
             ...cleanProcessedPayload
           } = processedPayload as any;
           const customRequestPayload = {
@@ -686,9 +687,16 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           ) as any;
         } else {
           // Remove LobeHub-internal fields before sending to downstream API.
+          // `thinking` is a runtime abstraction consumed by provider-specific
+          // handlePayload implementations; generic OpenAI-compatible APIs reject it.
           // `preserveThinking` is only consumed by Qwen/Zhipu handlePayload (which runs above)
           // and must not leak to other providers' APIs as an unknown parameter.
-          const { apiMode: _, preserveThinking: _pt, ...cleanedPayload } = postPayload as any;
+          const {
+            apiMode: _,
+            preserveThinking: _pt,
+            thinking: _thinking,
+            ...cleanedPayload
+          } = postPayload as any;
           const finalPayload = {
             ...cleanedPayload,
             messages,
@@ -1407,6 +1415,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       delete res.frequency_penalty;
       delete res.presence_penalty;
       delete res.preserveThinking;
+      delete res.thinking;
 
       const input = await convertOpenAIResponseInputs(messages as any, {
         forceImageBase64: chatCompletion?.forceImageBase64,
